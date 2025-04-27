@@ -1,10 +1,10 @@
 # 3020_FINAL_PROJECT_2025
 
 ## SCHEDULE
-- [ ] Thursday 24th - Floating point numbers and start string
-- [ ] Sunday 27th - Finish string and write project milestone
+- [x] Thursday 24th - Floating point numbers and start string
+- [ ] Sunday 27th - Fixed parser for floats + Finish string and write project milestone
 - [ ] Tuesday 29th - Make modifications
-- [ ] Thursday May 1st - Work through new passes
+- [ ] Thursday May 1st - Work through new passes + write test cases
 - [ ] Sunday May 4th - finish code, readme, video, submit everything
 
 ## TODO's
@@ -16,7 +16,7 @@
     - [ ] makes two new AST classes
     
 - [ ] Strings
-  - [ ] In cs 3020 support directory, in python_parser.py
+  - [x] In cs 3020 support directory, in python_parser.py
         - Modify constant case to have an assertion like `assert isinstance(c, (bool, int, str))`
 
   - [ ] Add support for string creation
@@ -25,12 +25,18 @@
   - [ ] Add support for string printing
     - [ ] Change the print case in select instructions
     - [ ] Option 1: implement print_str in the runtime.c
-    - [ ] Option 2:  print strings by repeatedly printing ascii codes of the characters of the string (using print_int)  
+    - [ ] Option 2:  print strings by repeatedly printing ascii codes of the characters of the string (using print_int) 
+  - [ ] Typechecker 
 - [ ] Prim: concat
     - [ ] Allocate a new string that can hold the concatenation of both strings.
     - [ ] Copy characters from the two strings.
     - [ ] Implement this in select-instructions.
         
 - [ ] Floating point numbers
+  - [ ] Typechecker
 
 - [ ] Optimizations 
+
+## QUESTIONS FOR OFFICE HOURS
+- [ ] We are adding floats. We changed python_parser.py, eval_x86.py (added classes). 
+    - x86 parser is not liking floats. Our output when we run is --> line 96 in parser "invalid literal for int"
