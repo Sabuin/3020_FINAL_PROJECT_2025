@@ -2,7 +2,7 @@
 
 ## SCHEDULE
 - [x] Thursday 24th - Floating point numbers and start string
-- [ ] Sunday 27th - write project milestone
+- [x] Sunday 27th - write project milestone
 - [ ] Tuesday 29th - Start dynamic typing --> implement gradual dynamic typing. 
 - [ ] Thursday May 1st - Work through new passes + write test cases
 - [ ] Sunday May 4th - finish code, readme, video, submit everything
