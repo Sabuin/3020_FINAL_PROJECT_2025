@@ -106,9 +106,7 @@ def string_to_tuple(program:Program) -> Program:
 
             case Prim(op, args):
                 new_args = [st_exp(e) for e in args]
-                new_e = Prim(op, new_args)
-                new_v = gensym('tmp')
-                return Var(new_v)
+                return Prim(op, new_args)
             case _:
                 raise Exception('st_exp', e)
 
@@ -301,15 +299,18 @@ def rco(prog: Program) -> Program:
         match stmt:
             case Return(e):
                 return Return(rco_exp(e, new_stmts))
+
             case FunctionDef(name, args, body, return_t):
                 return FunctionDef(name, args, rco_stmts(body), return_t)
 
             case Assign(x, e1):
                 new_e1 = rco_exp(e1, new_stmts)
                 return Assign(x, new_e1)
+
             case Print(e1):
                 new_e1 = rco_exp(e1, new_stmts)
                 return Print(new_e1)
+
             case If(condition, then_stmts, else_stmts):
                 new_condition = rco_exp(condition, new_stmts)
                 new_then_stmts = rco_stmts(then_stmts)
@@ -318,6 +319,7 @@ def rco(prog: Program) -> Program:
                 return If(new_condition,
                           new_then_stmts,
                           new_else_stmts)
+
             case While(condition, body_stmts):
                 condition_stmts = []
                 condition_exp = rco_exp(condition, condition_stmts)
@@ -348,8 +350,10 @@ def rco(prog: Program) -> Program:
 
             case Var(x):
                 return Var(x)
+
             case Constant(i):
                 return Constant(i)
+
             case Prim(op, args):
                 new_args = [rco_exp(e, new_stmts) for e in args]
                 new_e = Prim(op, new_args)
