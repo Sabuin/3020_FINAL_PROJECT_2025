@@ -14,6 +14,7 @@ import cif
 from interference_graph import InterferenceGraph
 import print_x86defs
 from FP.constants import caller_saved_registers, callee_saved_registers
+from typing import TypeVar
 
 comparisons = ['eq', 'gt', 'gte', 'lt', 'lte']
 gensym_num = 0
@@ -101,12 +102,13 @@ def string_to_tuple(program:Program) -> Program:
                     for char in i:
                         st.append(Constant(ord(char)))
                     return Prim('tuple', st)
-                return Constant(i)
+                else:
+                    return Call(Var("inject"), [i, int])
 
 
             case Prim(op, args):
-                new_args = [st_exp(e) for e in args]
-                return Prim(op, new_args)
+                new_args = [Call(Var("project"), [st_exp(e)]) for e in args]
+                return Call(Var("inject"), [Prim(op, new_args)])
             case _:
                 raise Exception('st_exp', e)
 
@@ -134,6 +136,13 @@ class Callable:
     args: List[type]
     output_type: type
 
+@dataclass
+class AnyVal:
+    val: any
+    tag: type
+
+
+
 # TODO: STRINGS
 def typecheck(program: Program) -> Program:
     """
@@ -144,13 +153,22 @@ def typecheck(program: Program) -> Program:
 
     def tc_exp(e: Expr, env: TEnv) -> type:
         match e:
+            case Call(Var("inject"), [e1, e2]):
+                return e2
+
+            case Call(Var("project"), [e1, e2]):
+                return e2
+
             case Call(func, args):
                 function_type = tc_exp(func, env)
                 assert isinstance(function_type, Callable)
                 return function_type.output_type
 
             case Var(x):
-                return env[x]
+                if x == "inject" or x == "project":
+                    return None
+                else:
+                    return env[x]
 
             case Constant(i):
                 if isinstance(i, bool):
@@ -1187,6 +1205,31 @@ def add_allocate(program: str) -> str:
     """
     return program + alloc
 
+def add_inject(program: str) -> str:
+    inject = """
+    inject:
+        movq %rdi, %rax
+        salq $3, %rax
+        addq %rsi, %rax
+        retq
+    """
+    return program + inject
+
+def add_project(program: str) -> str:
+    project = """
+    project:
+        movq %rdi, %rax
+        andq $7, %rax
+        cmpq %rax, %rsi
+        je goodasdf
+        throw_exception
+    goodasdf:
+        movq %rdi, %rax
+        retq
+    """
+
+    return
+
 
 ##################################################
 # Compiler definition
@@ -1203,7 +1246,9 @@ compiler_passes = {
     'patch instructions': patch_instructions,
     'prelude & conclusion': prelude_and_conclusion,
     'print x86': x86.print_x86,
-    'add allocate': add_allocate
+    'add allocate': add_allocate,
+    'add inject': add_inject,
+    'add project': add_project
 }
 
 
