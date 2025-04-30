@@ -103,12 +103,12 @@ def string_to_tuple(program:Program) -> Program:
                         st.append(Constant(ord(char)))
                     return Prim('tuple', st)
                 else:
-                    return Call(Var("inject"), [i, int])
+                    return Call(Var("inject"), [Constant(i), Constant(int)])
 
 
             case Prim(op, args):
-                new_args = [Call(Var("project"), [st_exp(e)]) for e in args]
-                return Call(Var("inject"), [Prim(op, new_args)])
+                new_args = [Call(Var("project"), [st_exp(e), Constant(type(e))]) for e in args]
+                return Call(Var("inject"), [Prim(op, new_args), Constant(type())])
             case _:
                 raise Exception('st_exp', e)
 
@@ -154,9 +154,11 @@ def typecheck(program: Program) -> Program:
     def tc_exp(e: Expr, env: TEnv) -> type:
         match e:
             case Call(Var("inject"), [e1, e2]):
-                return e2
+                print("in")
+                return AnyVal
 
             case Call(Var("project"), [e1, e2]):
+                print("pro")
                 return e2
 
             case Call(func, args):
@@ -305,6 +307,9 @@ def typecheck(program: Program) -> Program:
 # Stmts  ::= List[Stmt]
 # LFun   ::= Program(Stmts)
 
+tags = {int: 1, bool: 2, tuple: 3, float: 5}
+
+
 def rco(prog: Program) -> Program:
     """
     Removes complex operands. After this pass, the arguments to operators (unary and binary
@@ -323,7 +328,7 @@ def rco(prog: Program) -> Program:
 
             case Assign(x, e1):
                 new_e1 = rco_exp(e1, new_stmts)
-                return Assign(x, new_e1)
+                return Assign(x, Call(Var("inject"), [new_e1, type(new_e1)]))
 
             case Print(e1):
                 new_e1 = rco_exp(e1, new_stmts)
@@ -370,14 +375,27 @@ def rco(prog: Program) -> Program:
                 return Var(x)
 
             case Constant(i):
-                return Constant(i)
+                tmp_v = gensym('tmp')
+                new_stmts.append(Assign(tmp_v, Call(Var("inject"), [i, tags[type(i)]])))
+                return Var(tmp_v)
 
             case Prim(op, args):
                 new_args = [rco_exp(e, new_stmts) for e in args]
+
+                new_v = gensym('tmp')
+                for arg in new_args:
+                    new_stmts.append(Assign(new_v, Call(Var("project"), [arg, ])))
+
+
                 new_e = Prim(op, new_args)
                 new_v = gensym('tmp')
                 new_stmts.append(Assign(new_v, new_e))
-                return Var(new_v)
+
+
+
+
+
+                return Var()
             case _:
                 raise Exception('rco_exp', e)
 
@@ -656,18 +674,40 @@ def select_instructions(prog: cif.CProgram) -> X86ProgramDefs:
 
                 case cif.Assign(x, cif.Prim(op, [atm1, atm2])):
                     if op in binop_instrs:
-                        e1 = si_expr(atm1)
-                        e2 = si_expr(atm2)
-                        if get_type(e1) == float or get_type(e2) == float:
-                            op = "f" + op
+                        if op in ["add", "sub", "mult"]:
+                            tag = 1
 
-                        return [x86.Movq(si_expr(atm1), x86.Reg('rax')),
-                                binop_instrs[op](si_expr(atm2), x86.Reg('rax')),
-                                x86.Movq(x86.Reg('rax'), x86.Var(x))]
+                            e1 = si_expr(atm1)
+                            e2 = si_expr(atm2)
+                            if get_type(e1) == float or get_type(e2) == float:
+                                op = "f" + op
+
+                        elif op in ["and", "or"]:
+                            tag = 2
+                        return [x86.Movq(si_expr(atm1), x86.Reg('rdi')),
+                                x86.Movq(x86.Immediate(tag), x86.Reg('rsi')),
+                                x86.Callq("project"),
+                                x86.Movq(x86.Reg("rax"), x86.Reg("rdx")),
+
+                                x86.Movq(si_expr(atm2), x86.Reg('rdi')),
+                                x86.Movq(x86.Immediate(tag), x86.Reg('rsi')),
+                                x86.Callq("project"),
+
+                                binop_instrs[op](x86.Reg("rdx"), x86.Reg("rax")),
+                                x86.Movq(x86.Reg("rax"), x86.Reg("rdi")),
+
+                                x86.Movq(x86.Immediate(tag), x86.Reg('rsi')),
+                                x86.Callq("inject"),
+                                x86.Movq(x86.Reg("rax"), x86.Var(x))]
+
                     elif op in op_cc:
-                        return [x86.Cmpq(si_expr(atm2), si_expr(atm1)),
-                                x86.Set(op_cc[op], x86.ByteReg('al')),
-                                x86.Movzbq(x86.ByteReg('al'), x86.Var(x))]
+                        return [
+
+                            x86.Cmpq(si_expr(atm2), si_expr(atm1)),
+
+                            x86.Set(op_cc[op], x86.ByteReg('al')),
+                            x86.Movzbq(x86.ByteReg('al'), x86.Var(x))]
+
 
                     else:
                         raise Exception('si_stmt failed op', op)
@@ -1222,13 +1262,14 @@ def add_project(program: str) -> str:
         andq $7, %rax
         cmpq %rax, %rsi
         je goodasdf
-        throw_exception
+        exit
     goodasdf:
         movq %rdi, %rax
+        sarq $3, %rax 
         retq
     """
 
-    return
+    return program + project
 
 
 ##################################################
