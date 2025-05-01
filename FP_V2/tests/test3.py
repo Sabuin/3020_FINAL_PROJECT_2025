@@ -1,8 +1,8 @@
 x = 7
 
 if x == 6:
-    x = 3
+    x = True
 else:
-  x = True
+    x = 3
 
 print(x)

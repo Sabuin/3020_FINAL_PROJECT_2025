@@ -1,28 +1,6 @@
 '''
 Implement compiler for a gradually-compiled language
-
-Easy way:
-    [ ] 1. Add cases to typechecker for inject and project
-        - `inject function` takes a statically-typed input and produces an Any type with a tag.
-        - `project function` takes an Any-typed input with a tag and produces a statically-typed output (without tag)
-
-    [ ] 2. Add cases in select-instructions that turn inject and project into function calls
-
-    [ ] 3. Implement inject and project as x86 functions and append them to the program
-
-Big ideas:
-1. We might not know the type of a variable at compile time, so we need to check types at runtime
-(e.g. for +, both arguments should be int -- need to generate code to check this at runtime)
-   - Example: For a + operation:
-       - first check the least significant 3 bits are equal to 001,
-       - then shift the value to the right by 3 bits to eliminate the tag,
-       - then do the addq
-       - Then shift the result to the left buy 3bits and add the 001 tag.
-3. Add tags to values at runtime so that we can check their types.
-    - use least-significant 3 bits to add a tag to all values saying their type (e.g. "int" tag is 001). This means that ur 64-bit values are now actually only 61 bits
-
-To avoid changing too much in the compiler:
-- Don't remove type info completely, instead, introduce an "Any" type.
+Finished gradually-compiled typing.
 '''
 
 from typing import Set, Dict
@@ -70,6 +48,144 @@ def gensym(x):
     return f'{x}_{gensym_num}'
 
 
+# NEW PASS
+def string_to_tuple(program:Program) -> Program:
+    def st_stmts(stmts: List[Stmt]) -> List[Stmt]:
+        output = []
+        for s in stmts:
+            output.append(st_stmt(s))
+        return output
+
+    def st_stmt(stmt: Stmt) -> Stmt:
+        match stmt:
+            case Return(e):
+                return Return(st_exp(e))
+            case FunctionDef(name, args, body, return_t):
+                return FunctionDef(name, args, st_stmts(body), return_t)
+
+            case Assign(x, e1):
+                new_e1 = st_exp(e1)
+                return Assign(x, new_e1)
+            case Print(e1):
+                new_e1 = st_exp(e1)
+                return Print(new_e1)
+            case If(condition, then_stmts, else_stmts):
+                new_condition = st_exp(condition)
+                new_then_stmts = st_stmts(then_stmts)
+                new_else_stmts = st_stmts(else_stmts)
+
+                return If(new_condition,
+                          new_then_stmts,
+                          new_else_stmts)
+            case While(condition, body_stmts):
+                condition_stmts = []
+                condition_exp = st_exp(condition)
+                new_condition = Begin(condition_stmts, condition_exp)
+                new_body_stmts = st_stmts(body_stmts)
+                return While(new_condition, new_body_stmts)
+            case _:
+                raise Exception('st_stmt', stmt)
+
+    def st_exp(e: Expr):
+        match e:
+            case Call(func, args):
+                new_args = [st_exp(e) for e in args]
+                new_e = Call(func, new_args)
+
+                return new_e
+
+            case Var(x):
+                return Var(x)
+
+            case Constant(i):
+                if type(i) == str:
+                    st = []
+                    for char in i:
+                        st.append(Constant(ord(char)))
+                    return Prim('tuple', st)
+                else:
+                    return Constant(i)
+
+
+            case Prim(op, args):
+                new_args = [st_exp(e) for e in args]
+                return Prim(op, new_args)
+            case _:
+                raise Exception('st_exp', e)
+
+    match program:
+        case Program(stmts):
+            return Program(st_stmts(stmts))
+
+
+# floating_vars = {}
+# # float pass?
+# def float_adjust(program: Program) -> Program:
+#     def fa_stmts(stmts: List[Stmt]) -> List[Stmt]:
+#         output = []
+#         for stmt in stmts:
+#             output.append(fa_stmt(stmt))
+#         return output
+#
+#
+#     def fa_stmt(stmt: Stmt) -> Stmt:
+#         match stmt:
+#             case Assign(x, e):
+#                 new_e = fa_expr(e)
+#                 if new_e[1]:
+#                     floating_vars[x] = True
+#
+#                 return Assign(x, new_e[0])
+#
+#             case Print(e):
+#                 new_e = fa_expr(e)[0]
+#                 return Print(new_e)
+#
+#             case If(condition, then_stmts, else_stmts):
+#                 new_c = fa_expr(condition)[0]
+#                 new_then = fa_stmts(then_stmts)
+#                 new_else = fa_stmts(else_stmts)
+#                 return If(new_c, new_then, new_else)
+#
+#             case While(condition, body_stmts):
+#                 new_c = fa_expr(condition)[0]
+#                 new_body = fa_stmts(body_stmts)
+#                 return While(new_c, new_body)
+#
+#             case Return(e):
+#                 new_e = fa_expr(e)[0]
+#                 return Return(new_e)
+#
+#             case FunctionDef(name, args, body, return_t):
+#                 new_body = fa_stmts(body)
+#                 return FunctionDef(name, args, new_body, return_t)
+#
+#     def fa_expr(e: Expr) -> (Expr, bool):
+#         match e:
+#             case Prim(op, args):
+#                 for arg in args:
+#                     if fa_expr(arg)[1]:
+#                         return Prim("f" + op, args), True
+#                 return Prim(op, args), False
+#
+#             case Var(x):
+#                 if x in floating_vars:
+#                     return Var(x), True
+#                 else:
+#                     return Var(x), False
+#
+#             case Constant(i):
+#                 if type(i) == float:
+#                     return Constant(i), True
+#             case _:
+#                 return e, False
+#
+#     match program:
+#         case Program(stmts):
+#             return Program(fa_stmts(stmts))
+
+
+
 ##################################################
 # typecheck
 ##################################################
@@ -94,7 +210,7 @@ class AnyType:
     value: any
     tag: type
 
-
+# TODO: Maybe use correct op-codes?
 def typecheck(program: Program) -> Program:
     """
     Typechecks the input program; throws an error if the program is not well-typed.
@@ -128,6 +244,8 @@ def typecheck(program: Program) -> Program:
         'lte': bool,
     }
 
+    arith_ops = ["add", "sub", "mult"]
+
     def tc_exp(e: Expr, env: TEnv) -> type:
         match e:
             case Call(Var("inject"), [val, tag]):
@@ -153,6 +271,8 @@ def typecheck(program: Program) -> Program:
                     return bool
                 elif isinstance(i, int):
                     return int
+                elif isinstance(i, float):
+                    return float
                 else:
                     raise Exception('tc_exp', e)
             case Prim('eq', [e1, e2]):
@@ -171,8 +291,13 @@ def typecheck(program: Program) -> Program:
                 return t[i]
             case Prim(op, args):
                 arg_types = [tc_exp(a, env) for a in args]
-                assert arg_types == prim_arg_types[op]
-                return prim_output_types[op]
+                if op in arith_ops:
+                    for arg_t in arg_types:
+                        assert arg_t in [int, float]
+                    return float
+                else:
+                    assert arg_types == prim_arg_types[op]
+                    return prim_output_types[op]
             case _:
                 raise Exception('tc_exp', e)
 
@@ -570,6 +695,7 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
     op_cc = {'eq': 'e', 'gt': 'g', 'gte': 'ge', 'lt': 'l', 'lte': 'le'}
 
     binop_instrs = {'add': x86.Addq, 'sub': x86.Subq, 'mult': x86.Imulq,
+                    'fadd': x86.Addq, 'fsub': x86.Subq, 'fmul': x86.Imulq,
                     'and': x86.Andq, 'or': x86.Orq}
 
     def si_stmt(stmt: cif.Stmt) -> List[x86.Instr]:
@@ -1178,6 +1304,8 @@ def add_project(program: str) -> str:
 ##################################################
 
 compiler_passes = {
+    'string_to_tuples': string_to_tuple,
+    # 'float_adjust': float_adjust,
     'typecheck': typecheck,
     'remove complex opera*': rco,
     'typecheck2': typecheck,
