@@ -2,7 +2,6 @@
 Implement compiler for a gradually-compiled language
 Finished gradually-compiled typing.
 '''
-
 from typing import Set, Dict
 import itertools
 import sys
@@ -442,6 +441,19 @@ def rco(prog: Program) -> Program:
         case Program(stmts):
             return Program(rco_stmts(stmts))
 
+# def print_string(prog: Program) -> Program:
+#     def ps_stmts(stmts: List[Stmt]) -> List[Stmt]:
+#         output = []
+#         for s in stmts:
+#             output += ps_stmt(s)
+#         return output
+#
+#     def ps_stmt(stmt: Stmt) -> List[Stmt]:
+#         match stmt:
+#             case Print(Var(x)):
+#                 if x in tuple_var_types.keys():
+#
+
 
 ##################################################
 # explicate-control
@@ -758,6 +770,15 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                         x86.Xorq(x86.Immediate(1), x86.Var(x))]
             case cif.Assign(x, atm1):
                 return [x86.Movq(si_expr(atm1), x86.Var(x))]
+            case cif.Print(cif.Var(x)):
+                if x in tuple_var_types.keys():
+                    output = [x86.Movq(x86.Var(x), x86.Reg('r11'))]
+                    for i in range(1, len(tuple_var_types[x]) + 1):
+                        output += [x86.Movq(x86.Deref('r11', (8*i)), x86.Reg('rdi')),
+                                   x86.Callq('print_int')]
+                    return output
+                return [x86.Movq(x86.Var(x), x86.Reg('rdi')),
+                        x86.Callq('print_int')]
             case cif.Print(atm1):
                 return [x86.Movq(si_expr(atm1), x86.Reg('rdi')),
                         x86.Callq('print_int')]
