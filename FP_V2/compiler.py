@@ -274,16 +274,20 @@ def typecheck(program: Program) -> Program:
                     return float
                 else:
                     raise Exception('tc_exp', e)
+
             case Prim('eq', [e1, e2]):
                 assert tc_exp(e1, env) == tc_exp(e2, env)
                 return bool
+
             case Begin(stmts, e1):
                 tc_stmts(stmts, env)
                 return tc_exp(e1, env)
+
             case Prim('tuple', args):
                 arg_types = [tc_exp(a, env) for a in args]
                 t = tuple(arg_types)
                 return t
+
             case Prim('subscript', [e1, Constant(i)]):
                 t = tc_exp(e1, env)
                 assert isinstance(t, tuple)
@@ -291,6 +295,10 @@ def typecheck(program: Program) -> Program:
             case Prim(op, args):
                 arg_types = [tc_exp(a, env) for a in args]
                 if op in arith_ops:
+                    if op == "add":
+                        if type(arg_types[0]) == tuple:
+                            assert type(arg_types[0]) == type(arg_types[1])
+                            return tuple
                     for arg_t in arg_types:
                         assert arg_t in [int, float]
                     return float
@@ -324,12 +332,15 @@ def typecheck(program: Program) -> Program:
             case While(condition, body_stmts):
                 assert tc_exp(condition, env) == bool
                 tc_stmts(body_stmts, env)
+
             case If(condition, then_stmts, else_stmts):
                 assert tc_exp(condition, env) == bool
                 tc_stmts(then_stmts, env)
                 tc_stmts(else_stmts, env)
+
             case Print(e):
                 tc_exp(e, env)
+
             case Assign(x, e):
                 t_e = tc_exp(e, env)
                 if x in env:
@@ -440,19 +451,6 @@ def rco(prog: Program) -> Program:
     match prog:
         case Program(stmts):
             return Program(rco_stmts(stmts))
-
-# def print_string(prog: Program) -> Program:
-#     def ps_stmts(stmts: List[Stmt]) -> List[Stmt]:
-#         output = []
-#         for s in stmts:
-#             output += ps_stmt(s)
-#         return output
-#
-#     def ps_stmt(stmt: Stmt) -> List[Stmt]:
-#         match stmt:
-#             case Print(Var(x)):
-#                 if x in tuple_var_types.keys():
-#
 
 
 ##################################################
@@ -714,6 +712,7 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
         match stmt:
             case cif.Assign(x, cif.Var(f)) if f in function_names:
                 return [x86.Leaq(x86.GlobalVal(f), x86.Var(x))]
+
             case cif.Assign(x, cif.Call(fun, args)):
                 instrs = []
 
@@ -739,6 +738,7 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                 # move the result from rax into the destination
                 instrs += [x86.Movq(x86.Reg('rax'), x86.Var(x))]
                 return instrs
+
             case cif.Assign(x, cif.Prim('tuple', args)):
                 tag = mk_tag(tuple_var_types[x])
                 instrs = [x86.Movq(x86.Immediate(8 * (1 + len(args))), x86.Reg('rdi')),
@@ -749,10 +749,48 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                     instrs.append(x86.Movq(si_expr(a), x86.Deref('r11', 8 * (i + 1))))
                 instrs.append(x86.Movq(x86.Reg('r11'), x86.Var(x)))
                 return instrs
+
             case cif.Assign(x, cif.Prim('subscript', [atm1, cif.Constant(idx)])):
                 offset_bytes = 8 * (idx + 1)
                 return [x86.Movq(si_expr(atm1), x86.Reg('r11')),
                         x86.Movq(x86.Deref('r11', offset_bytes), x86.Var(x))]
+
+            case cif.Assign(x, cif.Prim("add", [cif.Var(z), cif.Var(y)])):
+                t_types = []
+                for t in tuple_var_types[z]:
+                    t_types.append(t)
+                for t in tuple_var_types[y]:
+                    t_types.append(t)
+
+                t_types = tuple(t_types)
+                tuple_var_types[x] = t_types
+                tag = mk_tag(t_types)
+
+                # allocates new string
+                instrs = [x86.Movq(x86.Immediate(8 * (1 + len(t_types))), x86.Reg('rdi')),
+                          x86.Callq('allocate'),
+                          x86.Movq(x86.Reg('rax'), x86.Reg('r11')),
+                          x86.Movq(x86.Immediate(tag), x86.Deref('r11', 0)),
+                          x86.Movq(x86.Reg('r11'), x86.Var(x))]
+
+                offset = 8
+                # copy char's from string 1
+                for val in range(len(tuple_var_types[z])):
+                    instrs += [x86.Movq(x86.Var(z), x86.Reg('r11')),
+                                   x86.Movq(x86.Deref('r11', (val + 1) * 8), x86.Reg('rax')),
+                                   x86.Movq(x86.Var(x), x86.Reg('r11')),
+                                   x86.Movq(x86.Reg('rax'), x86.Deref('r11', offset))]
+                    offset += 8
+
+                # copy char's from string 2
+                for val in range(len(tuple_var_types[y])):
+                    instrs += [x86.Movq(x86.Var(y), x86.Reg('r11')),
+                                   x86.Movq(x86.Deref('r11', (val + 1) * 8), x86.Reg('rax')),
+                                   x86.Movq(x86.Var(x), x86.Reg('r11')),
+                                   x86.Movq(x86.Reg('rax'), x86.Deref('r11', offset))]
+                    offset += 8
+                return instrs
+
             case cif.Assign(x, cif.Prim(op, [atm1, atm2])):
                 if op in binop_instrs:
                     return [x86.Movq(si_expr(atm1), x86.Reg('rax')),
@@ -762,14 +800,15 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                     return [x86.Cmpq(si_expr(atm2), si_expr(atm1)),
                             x86.Set(op_cc[op], x86.ByteReg('al')),
                             x86.Movzbq(x86.ByteReg('al'), x86.Var(x))]
-
                 else:
                     raise Exception('si_stmt failed op', op)
             case cif.Assign(x, cif.Prim('not', [atm1])):
                 return [x86.Movq(si_expr(atm1), x86.Var(x)),
                         x86.Xorq(x86.Immediate(1), x86.Var(x))]
+
             case cif.Assign(x, atm1):
                 return [x86.Movq(si_expr(atm1), x86.Var(x))]
+
             case cif.Print(cif.Var(x)):
                 if x in tuple_var_types.keys():
                     output = [x86.Movq(x86.Var(x), x86.Reg('r11'))]
@@ -779,18 +818,23 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                     return output
                 return [x86.Movq(x86.Var(x), x86.Reg('rdi')),
                         x86.Callq('print_int')]
+
             case cif.Print(atm1):
                 return [x86.Movq(si_expr(atm1), x86.Reg('rdi')),
                         x86.Callq('print_int')]
+
             case cif.Return(atm1):
                 return [x86.Movq(si_expr(atm1), x86.Reg('rax')),
                         x86.Jmp(current_function + 'conclusion')]
+
             case cif.Goto(label):
                 return [x86.Jmp(label)]
+
             case cif.If(a, cif.Goto(then_label), cif.Goto(else_label)):
                 return [x86.Cmpq(si_expr(a), x86.Immediate(1)),
                         x86.JmpIf('e', then_label),
                         x86.Jmp(else_label)]
+
             case _:
                 raise Exception('si_stmt', stmt)
 
@@ -1113,6 +1157,37 @@ def _allocate_registers(current_function: str, program: x86.X86Program) -> x86.X
 
     return x86.X86Program(new_blocks, stack_space=(regular_stack_space, root_stack_slots))
 
+def remove_redundancies(program: X86ProgramDefs) -> X86ProgramDefs:
+    match program:
+        case X86ProgramDefs(defs):
+            new_defs = []
+            for d in defs:
+                new_program = _remove_redundancies(x86.X86Program(d.blocks))
+                new_defs.append(X86FunctionDef(d.label, new_program.blocks, new_program.stack_space))
+            return X86ProgramDefs(new_defs)
+
+def _remove_redundancies(program: x86.X86Program) -> x86.X86Program:
+    def rr_instrs(instrs: List[x86.Instr]) -> List[x86.Instr]:
+        output = []
+        for i in instrs:
+            output += rr_instr(i)
+        return output
+
+    def rr_instr(instr: x86.Instr) -> List[x86.Instr]:
+        match instr:
+            case x86.Movq(x86.Reg(x), x86.Reg(y)):
+                if x == y:
+                    return []
+                else:
+                    return [instr]
+
+    match program:
+        case x86.X86Program(blocks, stack_space):
+            new_blocks = {}
+            for label, instrs in blocks.keys():
+                new_blocks[label] = rr_instrs(instrs)
+            return x86.X86Program(new_blocks, stack_space)
+
 
 ##################################################
 # patch-instructions
@@ -1220,7 +1295,6 @@ def prelude_and_conclusion(program: X86ProgramDefs) -> x86.X86Program:
                             all_blocks[label] = instrs
             return x86.X86Program(all_blocks)
 
-
 def _prelude_and_conclusion(current_function: str, program: x86.X86Program) -> x86.X86Program:
     """
     Adds the prelude and conclusion for the program.
@@ -1263,7 +1337,6 @@ def _prelude_and_conclusion(current_function: str, program: x86.X86Program) -> x
     new_blocks[current_function] = prelude
     new_blocks[current_function + 'conclusion'] = conclusion
     return x86.X86Program(new_blocks, stack_space=program.stack_space)
-
 
 ##################################################
 # add-allocate
@@ -1340,7 +1413,6 @@ compiler_passes = {
     "add inject": add_inject,
     "add project": add_project
 }
-
 
 def run_compiler(s, logging=False):
     global tuple_var_types, function_names
