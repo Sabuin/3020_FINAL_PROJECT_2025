@@ -1,20 +1,25 @@
 # 3020_FINAL_PROJECT_2025
-### Brodie A. Duprey & Sasha J. Abuin
-This project extends our compiler to support more advanced language features and typing strategies. Our main goals were to implement **gradual typing, improve performance through some optimizations, and expand the compiler's capabilities to include string manipulation and floating-point arithmetic** These changes required careful updates mainly in our type-checker and select-instructions passes, as well as the addition of two new passes and inject & project functions. 
+###  Sasha J. Abuin & Brodie A. Duprey
+This project extends our compiler to support more advanced language features and typing strategies. 
+Our main goals were to implement **gradual typing, improve performance through some optimizations, 
+and expand the compiler's capabilities to include string manipulation and floating-point arithmetic** 
+These changes required careful updates mainly in our type-checker and select-instructions passes, as 
+well as the addition of two new passes and inject & project functions. 
 
 ## Compiler Changes
 ### String_to_tuple pass
-This pass is a transformation stage in the compiler that converts string constants into tuples of their ASCII values. 
+This pass is a transformation stage in the compiler that converts string constants into tuples of 
+their ASCII values. 
 
 ### Type checker pass
 We extended the type checker pass to support floats and string operations. 
 * For float support, the arithmetic operations (add, sub, mult) were updated to accept both int and float types.
-* For strings, we added handling for string constants by converting them into tuples of integer ASCII values in an earlier pass. The type checker recognizes these tuples and supports subscript operations on them. Additionally, we enabled string concatenation by treating it as tuple concatenation, verifying that both operands are tuples of the same type. 
+* For strings, we added handling for string constants by converting them into tuples of integer ASCII values in an earlier pass. The type checker recognizes these tuples and supports subscript operations on them. Additionally, we enabled string concatenation by treating it as tuple concatenation, verifying that both operands are tuples. 
 
 ### Select instructions 
 We extended the select_instructions pass to support operations involving strings and floats. 
 
-* For strings, which are represented as tuples of ASCII values, we added logic to handle tuple allocation, subscripting, and concatenation at the assembly level.
+* For strings, which are represented as tuples of ASCII values, we added logic to handle tuple concatenation at the assembly level.
   * Specifically, string concatenation is implemented by allocating a new tuple, computing the combined tag, and copying elements from the original tuples into the newly allocated memory.
   * For printing, if the argument is a tuple (i.e., a string), each character is printed sequentially using print_int after being loaded from memory.
   
@@ -29,4 +34,6 @@ As part of our optimization efforts, we implemented a *remove_redundancies* pass
 *Note: we have not tested this but we hope that in theory it works* 
 
 ## Features left to implement
-DISCUSS DURING FINAL MEETING. 
+* Fully implement dynamic typing
+* Additional optimizations (jumps)
+* 

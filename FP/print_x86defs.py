@@ -33,15 +33,6 @@ def print_x86_defs(program) -> str:
                 return f'subq {print_arg(a1)}, {print_arg(a2)}'
             case x86.Imulq(a1, a2):
                 return f'imulq {print_arg(a1)}, {print_arg(a2)}'
-
-            #ADDED CASES FOR FLOATS
-            case x86.Addq(a1, a2):
-                return f'faddq {print_arg(a1)}, {print_arg(a2)}'
-            case x86.Subq(a1, a2):
-                return f'fsubq {print_arg(a1)}, {print_arg(a2)}'
-            case x86.Imulq(a1, a2):
-                return f'fmulq {print_arg(a1)}, {print_arg(a2)}'
-
             case x86.Movq(a1, a2):
                 return f'movq {print_arg(a1)}, {print_arg(a2)}'
             case x86.Movzbq(a1, a2):

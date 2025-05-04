@@ -1,4 +1,3 @@
-x = 1.5
-x = x + 1.5
-
+x = 1
+x = True
 print(x)
