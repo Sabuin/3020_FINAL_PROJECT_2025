@@ -24,7 +24,7 @@ We extended the select_instructions pass to support operations involving strings
   * For printing, if the argument is a tuple (i.e., a string), each character is printed sequentially using print_int after being loaded from memory.
   
 * For float operations, we treat them uniformly with integer operations during instruction selection by mapping them to the same x86 arithmetic instructions (Addq, Subq, Imulq). This approach assumes that float and int operations are handled equivalently at the instruction level for simplicity.
-
+  *Note: x86 parser truncates floating-point values, but the pass works properly*
 ### Inject & Project
 To support gradual typing and runtime type tagging, we added two helper assembly routines: inject and project, included via the add_inject and add_project functions. These routines allow values to be tagged or untagged with type information at runtime. 
 
@@ -36,4 +36,3 @@ As part of our optimization efforts, we implemented a *remove_redundancies* pass
 ## Features left to implement
 * Fully implement dynamic typing
 * Additional optimizations (jumps)
-* 

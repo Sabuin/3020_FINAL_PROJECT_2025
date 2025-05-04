@@ -755,7 +755,7 @@ def _select_instructions(current_function: str, prog: cif.CProgram) -> x86.X86Pr
                 return [x86.Movq(si_expr(atm1), x86.Reg('r11')),
                         x86.Movq(x86.Deref('r11', offset_bytes), x86.Var(x))]
 
-            case cif.Assign(x, cif.Prim("add", [cif.Var(z), cif.Var(y)])):
+            case cif.Assign(x, cif.Prim("add", [cif.Var(z), cif.Var(y)])) if (z in tuple_var_types.keys() and y in tuple_var_types.keys()):
                 t_types = []
                 for t in tuple_var_types[z]:
                     t_types.append(t)
